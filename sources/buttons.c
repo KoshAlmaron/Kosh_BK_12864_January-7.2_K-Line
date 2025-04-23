@@ -8,6 +8,7 @@
 #include "uart.h"				// UART.
 #include "oled.h"				// OLED дисплей.
 #include "adc.h"				// АЦП.
+#include "display.h"			// Экраны БК.
 
 #include "buttons.h"			// Свой заголовок.
 
@@ -53,8 +54,8 @@ void button_action() {
 
 	int8_t BrightAdd = 0;
 	switch (BK.ScreenMode) {
-		case 0:		// Основной экран.
-			// ==================== ЯРКОСТЬ ЭКРАНА ====================
+		case DISPLAY_MAIN:		// Основной экран.
+			// ==================== ЯРКОСТЬ ЭКРАНА ============================
 			if (buttons_get_state(BTN_UP) == 1) {BrightAdd = LCD_BRIGHT_STEP;}			// Коротое вверх.
 			if (buttons_get_state(BTN_DOWN) == 1) {BrightAdd = -1 * LCD_BRIGHT_STEP;}	// Коротое вниз.
 
@@ -62,7 +63,7 @@ void button_action() {
 				if (!BK.ConfigBoxTimer) {BK.ConfigBoxTimer = BRIGHT_BOX_TIMER;}
 				else {
 					BK.ConfigBoxTimer = BRIGHT_BOX_TIMER;
-					#ifdef AUTO_BRIGHT_PIN
+					#ifdef AUTO_BRIGHT_ADC_CHANNEL
 						if (get_adc_value() < 512) {
 							BK.BrightLCD[1] = CONSTRAIN(BK.BrightLCD[1] + BrightAdd, 0, 255);
 						}
@@ -75,20 +76,27 @@ void button_action() {
 					#endif
 				}
 			}
-			// ==================== ЯРКОСТЬ ЭКРАНА ====================
-		
-			if (buttons_get_state(BTN_UP) == 2) { 	// Длинное вверх.
-				// Сброс cуточного пробега и пробега за поездку.
+			// ======== Сброс cуточного пробега и пробега за поездку =========
+			if (buttons_get_state(BTN_UP) == 2) { 		// Длинное вверх.
 				BK.DistRide = 0;
 				BK.FuelRide = 0;
 				BK.DistDay = 0;
 				BK.FuelDay = 0;
 				BK.RideTimer = 0;
 			}
-			break;			
-		case 4:		// Сохраненные ошибки.
+			break;
+			// =============== Повторная инициализация дисплея ================
+			if (buttons_get_state(BTN_DOWN) == 2) { 	// Длинное вниз.
+				oled_init(0x3c, BK.BrightLCD[0], 0);
+			}
+		case DISPLAY_ACCELERATION:		// Экран замера разгона..
 			if (buttons_get_state(BTN_UP) == 2) { 	// Длинное вверх.
-				uart_send_command(COMMAND_CDI);	// Сброс ошибок CE.
+				BK.AccelMeterStatus = 0; // Сброс состояния замера.
+			}
+			break;	
+		case DISPLAY_SAVED_ERRORS:		// Сохраненные ошибки.
+			if (buttons_get_state(BTN_UP) == 2) { 	// Длинное вверх.
+				uart_send_command(COMMAND_CDI);		// Сброс ошибок CE.
 				BK.DataStatus = 16;
 			}
 			break;

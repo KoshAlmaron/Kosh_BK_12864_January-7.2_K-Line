@@ -88,8 +88,8 @@ uint16_t uart_get_uint16(uint8_t i) {
 	i += HeaderSize - 1;
 	uint16_t Value = 0;
 	uint8_t *pValue = (uint8_t*)&Value;
-	*pValue = RxBuffer[i + 1];  
-	*(pValue + 1) = RxBuffer[i];
+	*pValue = RxBuffer[i];  
+	*(pValue + 1) = RxBuffer[i + 1];
 	return Value;
 }
 
@@ -97,8 +97,8 @@ int16_t uart_get_int16(uint8_t i) {
 	i += HeaderSize - 1;
 	int16_t Value = 0;
 	uint8_t *pValue = (uint8_t*)&Value;
-	*pValue = RxBuffer[i + 1];  
-	*(pValue + 1) = RxBuffer[i];
+	*pValue = RxBuffer[i];  
+	*(pValue + 1) = RxBuffer[i + 1];
 	return Value;
 }
 
@@ -150,6 +150,11 @@ void uart_send_command(uint8_t Command) {
 		case COMMAND_STC:			// Начало обмена.
 			RxMsgType = 0x81;		// Код запроса.
 			RxMsgAnswer = 0xC1;		// Код положительного ответа.
+			TxBuffer[TxBuffPos++] = RxMsgType;
+			break;
+		case COMMAND_SPC:			// Начало обмена.
+			RxMsgType = 0x82;		// Код запроса.
+			RxMsgAnswer = 0xC2;		// Код положительного ответа.
 			TxBuffer[TxBuffPos++] = RxMsgType;
 			break;
 		case COMMAND_CDI:			// Стереть ошибки.

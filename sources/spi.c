@@ -1,5 +1,6 @@
 #include <avr/io.h>			// Названия регистров и номера бит.
 #include <stdint.h>			// Коротние название int.
+#include "util/delay.h"		// Задержки.
 
 #include "macros.h"			// Макросы.
 #include "pinout.h"			// Начначение выводов контроллера.
@@ -9,6 +10,7 @@
 
 #define SPI_SCL_PIN B, 5
 #define SPI_MOSI_PIN B, 3
+#define SPI_MISO_PIN B, 4
 
 // Настройка интерфейса.
 void spi_init() {
@@ -21,6 +23,12 @@ void spi_init() {
 	SET_PIN_MODE_OUTPUT(SPI_CS_PIN);
 	SET_PIN_HIGH(SPI_CS_PIN);
 	SET_PIN_MODE_OUTPUT(SPI_DC_PIN);
+
+	// Сброс дисплея на старте.
+	SET_PIN_MODE_OUTPUT(SPI_RESET_PIN);
+	SET_PIN_LOW(SPI_RESET_PIN);
+	_delay_ms(200);
+	SET_PIN_HIGH(SPI_RESET_PIN);
 
 	SPCR |= (1 << MSTR);		// SPI мастер.
 	SPCR |= (1 << SPE);			// SPI включен.

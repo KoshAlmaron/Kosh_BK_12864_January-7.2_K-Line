@@ -3,7 +3,6 @@
 #include <avr/io.h>				// Названия регистров и номера бит.
 #include <avr/interrupt.h>		// Прерывания.
 #include <avr/wdt.h>			// Сторожевой собак.
-#include "util/delay.h"			// Задержки.
 
 #include "timers.h"				// Таймеры.
 #include "macros.h"				// Макросы.
@@ -25,10 +24,10 @@
 #include "eeprom.h"				// Чтение и запись EEPROM.
 #include "buttons.h"			// Кнопки.
 #include "counters.h"			// Счетчики пробега и расхода топлива.
-#ifdef AUTO_BRIGHT_PIN
-	#include "adc.h"				// АЦП.
-#endif
+#include "adc.h"				// АЦП.
 #include "speed_chime.h"		// Колокольчик AE86.
+#include "spdsens.h"			// Датчик скорости.
+
 
 // Основной счетчик времени,
 // увеличивается по прерыванию на единицу каждую 1мс.
@@ -43,10 +42,13 @@ static uint8_t AutoBrightTimer = 0;		// Таймер авто яркости.
 static uint8_t SpeedChimeTimer = 0;		// Таймер колокольчика.
 static uint16_t WaitTimer = 0;			// Таймер ожидания.
 
+static uint16_t AccelerationTimer = 0;			// Таймер замера разгона.
+
 // Признак установленного соединения:
 // 0 - требуется инициализация,
 // 1 - ожидание начала соединения,
-// 2 - соединение установлено.
+// 2 - соединение установлено,
+// 3 - требуется завершить предыдущее соединение.
 static uint8_t CommInit = 0;
 
 // Текущая команда для получения данных.
@@ -57,7 +59,7 @@ static void setup();
 static void loop();
 static void timers_loop();
 static void ecu_communication();
-#ifdef AUTO_BRIGHT_PIN
+#ifdef AUTO_BRIGHT_ADC_CHANNEL
 	static uint8_t get_oled_bright();
 #endif
 static void ignition_monitoring();
@@ -78,11 +80,13 @@ int main() {
 static void setup() {
 	wdt_enable(WDTO_500MS);	// Сторожевой собак на 500 мс.
 
+	cli();
+
 	timers_init();		// Инициализация таймеров.
 	counters_init();	// Инициализация счетчиков пробега и расхода топлива.
 	uart_init();		// Инициализация UART.
 
-	#ifdef AUTO_BRIGHT_PIN
+	#ifdef AUTO_BRIGHT_ADC_CHANNEL
 		adc_init();			// Инициализация АЦП.
 	#endif
 
@@ -92,9 +96,12 @@ static void setup() {
 		i2c_init();			// Инициализация I2C.
 	#endif
 
-	SET_PIN_MODE_INPUT(INT_IGN_PIN);	// Проверка ЗЗ.
+	SET_PIN_MODE_INPUT(INT_IGN_PIN);		// Проверка ЗЗ.
 	SET_PIN_LOW(INT_IGN_PIN);
 
+	SET_PIN_MODE_INPUT(SILENT_MODE_PIN);	// Режим тишины.
+	SET_PIN_HIGH(SILENT_MODE_PIN);
+	
 	#ifdef INT_OIL_PIN					// ДАДМ
 		dadm_init();
 	#endif
@@ -107,19 +114,23 @@ static void setup() {
 
 	#ifdef DEBUG_MODE
 		SET_PIN_HIGH(INT_IGN_PIN);
-		BK.ScreenMode = 0;
+		BK.ScreenMode = 2;
 		debug_mode();
 	#endif
 	
-	//update_eeprom(0);
+	//update_eeprom(1);
 	// Считываем данные из EEPROM.
 	read_eeprom();
+	sei();
 
-	_delay_ms(200);						// Небольшая пауза перед настройкой дисплея.
-	#ifdef AUTO_BRIGHT_PIN
+	#ifdef AUTO_BRIGHT_ADC_CHANNEL
 		BK.BrightLCD[0] = get_oled_bright();	// Первоначальная установка яркости.
 	#endif
-	oled_init(0x3c, BK.BrightLCD[0], 0);	// Настройка OLED, для SPI адрес роли не играет.
+	oled_init(0x3c, 0, 0);	// Настройка OLED, для SPI адрес роли не играет.
+
+	#ifndef DEBUG_MODE
+		while (!PIN_READ(INT_IGN_PIN)) {wdt_reset();}
+	#endif
 }
 
 // Основной цикл
@@ -131,11 +142,28 @@ static void loop() {
 		debug_mode();
 	#endif
 
+	#ifdef INT_OIL_PIN
+		dadm_test();		// Проверка ДАДМ.
+	#endif
+
+	if (BK.AccelMeterStatus == 3 || BK.AccelMeterStatus == 4) {		// На старте.
+		acceleration_test(AccelerationTimer);
+		AccelerationTimer = 0;
+	}
+	else if (BK.AccelMeterStatus == 5 || BK.AccelMeterStatus == 6) {	// Идет замер.
+		acceleration_test(AccelerationTimer);
+	}
+	else if (AccelerationTimer > 1000) {		// Ожидание.
+		acceleration_test(AccelerationTimer);
+		AccelerationTimer = 0;
+	}
+
 	ignition_monitoring();
 	if (BK.StartStop == -2) {return;}
 
 	uint16_t UpdatePeriod = LCD_UPDATE_PERIOD;
 	if (BK.ScreenMode == 3) {UpdatePeriod = LCD_UPDATE_PERIOD / 2;}
+	if (BK.ScreenMode == 5) {UpdatePeriod = LCD_UPDATE_PERIOD * 5;}
 	if (BK.ScreenChange) {UpdatePeriod = CHANGE_ANIMATION_MS;}
 	if (BK.StartStop) {UpdatePeriod = START_ANIMATION_MS;}
 	
@@ -145,6 +173,8 @@ static void loop() {
 			LCDTimer = 0;
 			button_action();
 			buttons_clear(); // Сброс необработанных состояний.
+
+			if (!BK.ScreenChange && !BK.StartStop) {BK.DataStatus = 3;}
 		}
 	}
 	if (LCDTimer >= 2000 && oled_ready()) {
@@ -152,7 +182,7 @@ static void loop() {
 		display_draw_no_signal();
 	}
 
-	#ifdef AUTO_BRIGHT_PIN
+	#ifdef AUTO_BRIGHT_ADC_CHANNEL
 		if (AutoBrightTimer >= 50) {
 			AutoBrightTimer = 0;
 			uint8_t Bright = get_oled_bright();
@@ -182,10 +212,6 @@ static void timers_loop() {
 		MainTimer = 0;
 	sei();
 
-	#ifdef INT_OIL_PIN
-		dadm_test();		// Проверка ДАДМ.
-	#endif
-
 	// Счетчики времени.
 	if (TimerAdd) {
 		LCDTimer += TimerAdd;
@@ -194,14 +220,15 @@ static void timers_loop() {
 		AnswerTimer += TimerAdd;
 		AutoBrightTimer += TimerAdd;
 		SpeedChimeTimer += TimerAdd;
-		WaitTimer += 1;
+		WaitTimer += TimerAdd;
+		AccelerationTimer += TimerAdd;
 
 		if (RideTimerMs >= 1000) {
-			BK.RideTimer++;
+			if (BK.ScreenMode != 10) {BK.RideTimer++;}	// Не считать время на экране статистики.
 			RideTimerMs -= 1000;
 		}
 
-		BK.AlarmBoxTimer += TimerAdd;
+		if (!BK.ScreenChange) {BK.AlarmBoxTimer += TimerAdd;}
 		if (BK.AlarmBoxTimer > 800) {BK.AlarmBoxTimer = -800;}
 
 		if (BK.ConfigBoxTimer) {BK.ConfigBoxTimer--;}
@@ -214,7 +241,10 @@ static void timers_loop() {
 }
 
 static void ecu_communication() {
-	// Переключение комманд запроса данных.
+	// Отключать запросы к ЭБУ при подключении диагностического разъема.
+	if (!PIN_READ(SILENT_MODE_PIN)) {return;}
+	
+	// Переключение команд запроса данных.
 	uint8_t NewCommand = 0;
 	switch (BK.ScreenMode) {
 		case 0:	// Получить параметры двигателя.
@@ -251,14 +281,14 @@ static void ecu_communication() {
 			if (uart_tx_ready()) {
 				uart_send_command(COMMAND_STC);	// Запрос на установку соединения.
 				CommInit = 1;
-				AnswerTimer = 0;
+				AnswerTimer = -50;
 			}
 			break;
 		case 1:
 			if (uart_get_rx_status() == 2) {					// Пакет принят.
 				if (uart_test_rx_packet() == 3) {
 					CommInit = 2;	// Соединение установлено.
-					AnswerTimer = -100;
+					AnswerTimer = -50;
 				}
 			}
 			else if (uart_get_rx_status() >= 20) {	// Получен код ошибки.
@@ -272,6 +302,7 @@ static void ecu_communication() {
 			}
 			break;
 	}
+
 
 	if (CommInit != 2) {return;}
 
@@ -287,6 +318,7 @@ static void ecu_communication() {
 			if (uart_get_rx_status() == 2) {		// Пакет принят.
 				if (uart_test_rx_packet() == 3) {	// Пакет проверен.
 					BK.DataStatus = 2;				// Получен положительный ответ.
+					AnswerTimer = -50;
 				}
 			}
 			else if (uart_get_rx_status() >= 20) {	// Получен код ошибки.
@@ -317,7 +349,7 @@ static void ecu_communication() {
 	}
 }
 
-#ifdef AUTO_BRIGHT_PIN
+#ifdef AUTO_BRIGHT_ADC_CHANNEL
 	static uint8_t get_oled_bright() {
 		int32_t Value = get_adc_value() >> 2;
 		Value = (Value - BK.BrightLCD[1]) * (LCD_BRIGHT_MAX - LCD_BRIGHT_MIN) / (BK.BrightLCD[2] - BK.BrightLCD[1]) + LCD_BRIGHT_MIN;
@@ -327,6 +359,10 @@ static void ecu_communication() {
 #endif
 
 static void ignition_monitoring() {
+	#ifdef DEBUG_MODE
+		return;
+	#endif
+		
 	if (PIN_READ(INT_IGN_PIN)) {
 		if (BK.StartStop == -2) {
 			BK.ScreenMode = 0;
@@ -340,6 +376,7 @@ static void ignition_monitoring() {
 		}
 	}
 	else {
+		BK.DataStatus = 2;
 		if (BK.StartStop == 0) {
 			if (BK.ScreenMode == 10) {
 				if (WaitTimer > END_SCREEN_TIMER) {BK.StartStop = -1;}
@@ -369,11 +406,11 @@ static void debug_mode() {
 	set_rx_buffer(13, 0);	// ДПДЗ 				N = E [%]
 	set_rx_buffer(14, 9);	// Об/мин 				N = E * 40 [об/мин]
 	set_rx_buffer(15, 36);	// Об/мин ХХ 			N = E * 10 [об/мин]
-	set_rx_buffer(16, get_adc_value() >> 2);	// (*) Давление			N = E [кПа]
+	set_rx_buffer(16, 31);	// (*) Давление			N = E [кПа]
 	set_rx_buffer(17, 55);	// РХХ Текущее			N = E [шагов]
-	set_rx_buffer(18, 129);	// Коррекция ВП			N = (E + 128) / 256
+	set_rx_buffer(18, 154);	// Коррекция ВП			N = (E + 128) / 256
 	set_rx_buffer(19, 48);	// УОЗ					N = E / 2 [гр.КВ] , где E-знаковое
-	set_rx_buffer(20, 74);	// Скорость				N = E [км/час]
+	set_rx_buffer(20, 0);	// Скорость				N = E [км/час]
 	set_rx_buffer(21, 141);	// Напряжение пит.		N = 5.2 + E * 0.05 [В]
 	set_rx_buffer(22, 19);	// (*) Давление масла	N = ??? [кПа]
 	set_rx_buffer(23, 120);	// Напряжение УДК		N = 1.25 * E / 256 [В]

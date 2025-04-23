@@ -9,6 +9,7 @@
 	#define COMMAND_RDTCBS 2			// Считать ошибки.
 	#define COMMAND_RDBLI_RLI_ASS 3		// Получить параметры двигателя.
 	#define COMMAND_RDBLI_RLI_FT 4		// Получить значения АЦП.
+	#define COMMAND_SPC 5				// Завершение обмена.
 
 	#define ADDRESS_ECU 0x10
 	#define ADDRESS_BK 	0xF1

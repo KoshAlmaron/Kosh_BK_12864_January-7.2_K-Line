@@ -22,6 +22,7 @@ BK_t BK = {
 	.StartStop = 1,
 
 	.AlarmBoxTimer = 0,
-	.ConfigBoxTimer = 0
+	.ConfigBoxTimer = 0,
 
+	.AccelMeterStatus = 0
 };

@@ -10,31 +10,27 @@
 #define ADC_BUFFER_SIZE 8
 #define ADC_BUFFER_SHIFT 3
 
-#define ADC_CHANNEL 5
-
-#ifdef AUTO_BRIGHT_PIN
+#ifdef AUTO_BRIGHT_ADC_CHANNEL
 
 // Измеренные значения с буфером усреднения.
 volatile static uint16_t ADCValues[ADC_BUFFER_SIZE] = {0};
-// Текущая позиция в буфере.
+// Текущая позиция в буфере.s
 volatile static uint8_t BufPos = 0;
 
 // Инициализация АЦП.
 void adc_init() {
-	// Настройка порта с АЦП как вход без подтяжки.
-	SET_PIN_MODE_INPUT(AUTO_BRIGHT_PIN);
-	SET_PIN_LOW(AUTO_BRIGHT_PIN);
-
 	ADMUX = 0;
 	ADCSRA = 0;
 
 	ADMUX |= (1 << REFS0);					// Опорное напряжение 5В.
 	ADCSRA |= (1 << ADPS2) | (1 << ADPS1);	// Предделитель 64.
-	ADMUX |= ADC_CHANNEL;					// Установка текущего канала.
+	ADMUX |= AUTO_BRIGHT_ADC_CHANNEL;		// Установка текущего канала.
 	ADCSRA |= (1 << ADIE);					// Прерывание по окончании измерения.
 
 	ADCSRA |= (1 << ADEN);					// Включаем АЦП.
 	ADCSRA |= (1 << ADSC);					// Запуск первого измерения.
+
+	for (uint8_t i = 0; i < ADC_BUFFER_SIZE; i++) {ADCValues[i] = 1024;}
 }
 
 uint16_t get_adc_value() {
@@ -44,7 +40,7 @@ uint16_t get_adc_value() {
 	for (uint8_t i = 0; i < ADC_BUFFER_SIZE; i++) {AVG += ADCValues[i];}
 	sei();
 
-	return AVG >> ADC_BUFFER_SHIFT;
+	return 1024 - (AVG >> ADC_BUFFER_SHIFT);
 }
 
 // Прерывание по окончанию измерения.

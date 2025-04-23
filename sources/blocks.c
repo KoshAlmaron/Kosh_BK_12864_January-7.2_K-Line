@@ -26,20 +26,22 @@ static char Buffer[32] = {0};			// Строка для вывода на экр�
 // Минимальное и максимальное значение.
 const uint16_t GraphParameters[][2] PROGMEM =  {
 		  {0, 1 * 100}		// НАПРЯЖЕНИЕ_УДК		x100
-		, {20, 180 * 1}		// ДАВЛЕНИЕ_ВПУСКА		x1
+		, {100, 200 * 1}		// ДАВЛЕНИЕ_ВПУСКА		x1
 		, {0, 700 * 6}		// ЦИКЛОВОЕ_НАПОЛ-Е		x6
 		, {0, 550 * 10}		// РАСХОД_ВОЗДУХА		x10
-		, {0, 40 * 125}		// ВРЕМЯ_ВПРЫСКА		x125
+		, {0, 30 * 125}		// ВРЕМЯ_ВПРЫСКА		x125
 		, {0, 40 * 2}		// ТЕКУЩИЙ_УОЗ			x2
-		, {0, 2500 * 1}		// ОБОРОТЫ_ХХ			x1
+		, {600, 2000 * 1}	// ОБОРОТЫ_ХХ			x1
 		, {0, 6 * 10}		// ДАВЛЕНИЕ_МАСЛА		x10
 		, {0, 255 * 1}		// ПОЛОЖЕНИЕ_РХХ		x1
 };
 
+const uint8_t AccelPosY[3] = {5, 26, 49};
+
 void draw_error_box() {
     // Проверка ДАДМ.
 	#ifdef INT_OIL_PIN
-		if (BK.ScreenMode < 4) {
+		if (BK.ScreenMode < 5) {
 			uint16_t RPM = uart_get_uint8(14) * 40;
 			if (dadm_get_state(RPM) && BK.AlarmBoxTimer > 0) {
 				oled_draw_box(0, 0, 128, 64, 1);
@@ -50,7 +52,7 @@ void draw_error_box() {
 
 void draw_no_signal() {
 	oled_set_font(u8g2_font_cyrillic_5x8_tr);
-	oled_print_string_f(25, 28, NoSignal, 11);
+	oled_print_string_f(32, 29, NoSignal, 11);
 
 	#ifdef DEBUG_MODE
 		oled_set_font(u8g2_font_helvB08_tr);
@@ -77,7 +79,7 @@ void draw_config_box(uint8_t x, uint8_t y) {
 	oled_draw_box(x, y, 42, 21, 0);
 	oled_draw_mode(1);
 	
-	#ifdef AUTO_BRIGHT_PIN
+	#ifdef AUTO_BRIGHT_ADC_CHANNEL
 		uint8_t Value = get_adc_value() >> 2;
 
 		oled_set_font(u8g2_font_haxrcorp4089_tn);
@@ -94,10 +96,73 @@ void draw_config_box(uint8_t x, uint8_t y) {
 	oled_draw_mode(0);
 }
 
+void draw_acceleration() {
+	oled_set_font(u8g2_font_helvB08_tr);
+
+	// snprintf(Buffer, 4, "%-3u", BK.AccelMeterStatus);
+	// oled_print_string(0, 0, Buffer, 3);
+
+	switch (BK.AccelMeterStatus) {
+		case 0:
+			break;
+		case 1:
+			oled_draw_xbmp(16, 26, Stop_bits, Stop_width, Stop_height);
+			break;
+		case 2:
+			oled_draw_xbmp(16, 26, Stop_bits, Stop_width, Stop_height);
+			break;
+		case 3:
+			oled_draw_xbmp(8, 26, Ready_bits, Ready_width, Ready_height);
+			break;
+		case 4:
+			oled_draw_xbmp(8, 26, Ready_bits, Ready_width, Ready_height);
+			break;
+		case 64:
+			oled_draw_xbmp(2, 26, Fail_bits, Fail_width, Fail_height);
+			break;
+		default:
+			if (BK.AccelMeterStatus == 5 || BK.AccelMeterStatus == 7) {
+				oled_print_string(6, 7, "0-30", 4);
+				oled_print_string(6, 28, "0-60", 4);
+				oled_print_string(6, 51, "0-100", 5);
+				oled_set_font(u8g2_font_helvB10_tn);
+				for (uint8_t i = 0; i < 3; i++) {
+					if (get_accel_time(i)) {
+						snprintf(Buffer, 6, "%2u.%02u", get_accel_time(i) / 1000, (get_accel_time(i) % 1000) * 100 / 1000);
+						oled_print_string(38, AccelPosY[i], Buffer, 5);
+					}
+				}					
+			}
+			else if (BK.AccelMeterStatus == 6 || BK.AccelMeterStatus == 8) {
+				oled_print_string(6, 28, "60-100", 6);
+				oled_set_font(u8g2_font_helvB10_tn);
+				if (get_accel_time(2)) {
+					snprintf(Buffer, 6, "%2u.%02u", get_accel_time(2) / 1000, (get_accel_time(2) % 1000) * 100 / 1000);
+					oled_print_string(38, AccelPosY[1], Buffer, 5);
+				}
+			}
+			break;
+	}
+
+
+	// 0 - Отключено,
+	// 1 - ожидание остановки,
+	// 2 - ожидание скорости < 50 км/ч
+	// 3 - готов к замеру 0-100,
+	// 4 - готов к замеру 60-100,
+	// 5 - замер 0-100 запущен,
+	// 6 - замер 60-100 запущен,
+	// 7 - замер 0-100 завершен,
+	// 8 - замер 60-100 завершен,
+	// 64 - ошибка.
+
+	
+}
+
 void draw_current_errors() {
 	#define CE_ROWS_ON_SCREEN 4
 	#define CE_ROW_SPACE 5
-
+	
 	static uint8_t StartRow = 0;	// Номер первой строка.
 
 	uint8_t ErrorsCount = 0;
@@ -107,8 +172,8 @@ void draw_current_errors() {
 	
 	if (!ErrorsCount) {
 		oled_set_font(u8g2_font_cyrillic_5x8_tr);
-		oled_print_string_f(43, 25, CurrentErrors, 7);
-		oled_print_string_f(35, 36, NoErrors, 10);
+		oled_print_string_f(43, 23, CurrentErrors, 7);
+		oled_print_string_f(36, 35, NoErrors, 10);
 	}
 	else {
 		oled_set_font(u8g2_font_cyrillic_5x8_tr);
@@ -156,8 +221,8 @@ void draw_saved_errors() {
 	uint8_t ErrorsCount = uart_get_uint8(2);
 	if (!ErrorsCount) {
 		oled_set_font(u8g2_font_cyrillic_5x8_tr);
-		oled_print_string_f(31, 25, SavedErrors, 11);
-		oled_print_string_f(35, 36, NoErrors, 10);
+		oled_print_string_f(31, 23, SavedErrors, 11);
+		oled_print_string_f(36, 35, NoErrors, 10);
 	}
 	else {
 		oled_set_font(u8g2_font_helvB08_tr);
@@ -173,7 +238,7 @@ void draw_saved_errors() {
 								uart_get_uint8(StartByte), 
 								uart_get_uint8(StartByte + 1));
 
-				oled_print_string(x, y, Buffer, 10);
+				oled_print_string(x, y, Buffer, 5);
 				Row++;
 				if (Col == 0 && Row == SE_ROWS_ON_SCREEN) {	// Вторая колонка.
 					Col = 1;
@@ -214,8 +279,8 @@ void draw_adc_value() {
 
 			oled_print_string_f(1, y, (char*)pgm_read_word(&(ADCItemsArray[i])), 8);
 			Value = uart_get_uint8(3 + i) * 5;
-			snprintf(Buffer, 21, "%1u.%03lu", Value / 256, (uint32_t) (Value % 256) * 1000 / 256);
-			oled_print_string(90, y, Buffer, 10);
+			snprintf(Buffer, 6, "%1u.%03lu", Value / 256, (uint32_t) (Value % 256) * 1000 / 256);
+			oled_print_string(90, y, Buffer, 5);
 			Row++;
 		}
 	}
@@ -261,69 +326,69 @@ void draw_graph(uint8_t GraphNumber) {
 	oled_set_font(u8g2_font_haxrcorp4089_tn);
 	uint8_t Len = 0;
 	switch (GraphNumber) {
-	case 0:	// НАПРЯЖЕНИЕ_УДК
-		Len = 4;
-		Values[0] = (125 * uart_get_uint8(23)) >> 8; // x100.
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 5, "%1u.%02u", MIN(1, Values[i] / 100), MIN(99, Values[i] % 100));
-		}
-		break;
-	case 1:	// ДАВЛЕНИЕ_ВО_ВПУСКЕ
-		Len = 3;
-		Values[0] = uart_get_uint8(16);			// x1
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i]));
-		}
-		break;
-	case 2:	// ЦИКЛОВОЕ_НАПОЛНЕНИЕ
-		Len = 3;
-		Values[0] = uart_get_uint16(29);		// x6
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i] / 6));
-		}
-		break;
-	case 3:	// РАСХОД_ВОЗДУХА
-		Len = 3;
-		Values[0] = uart_get_uint16(27);		// x10
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i] / 10));
-		}
-		break;
-	case 4:	// ВРЕМЯ_ВПРЫСКА
-		Len = 4;
-		Values[0] = uart_get_uint16(25);		// x125
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 5, "%2u.%1u", MIN(99, Values[i] / 125), ((Values[i] % 125) * 10) / 125);
-		}
-		break;
-	case 5:	// ТЕКУЩИЙ_УОЗ
-		Len = 4;
-		Values[0] = uart_get_int8(19);			// x2
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 5, "%2u.%1u", MIN(99, (Values[i] / 2)), MIN(9, ABS((( Values[i] % 2) * 10) / 2)));
-		}
-		break;
-	case 6:	// ОБОРОТЫ_ХХ
-		Len = 4;
-		Values[0] = uart_get_uint8(15) * 10;	// x1
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 5, "%4u", Values[i]);
-		}
-		break;
-	case 7:	// ДАВЛЕНИЕ_МАСЛА
-		Len = 3;
-		Values[0] = uart_get_uint8(22);			// x10
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 4, "%1u.%1u", MIN(9, Values[i] / 10), MIN(9, Values[i] % 10));
-		}
-		break;
-	case 8:	// ПОЛОЖЕНИЕ_РХХ
-		Len = 3;
-		Values[0] = uart_get_uint8(17);			// x1
-		for (uint8_t i = 0; i < 6; i++) {
-			snprintf(Buffer + Len * i, 6, "%3u", MIN(999, Values[i]));
-		}
-		break;
+		case 0:	// НАПРЯЖЕНИЕ_УДК
+			Len = 4;
+			Values[0] = (125 * uart_get_uint8(23)) >> 8; // x100.
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 5, "%1u.%02u", MIN(1, Values[i] / 100), MIN(99, Values[i] % 100));
+			}
+			break;
+		case 1:	// ДАВЛЕНИЕ_ВО_ВПУСКЕ
+			Len = 3;
+			Values[0] = uart_get_uint8(16);			// x1
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i]));
+			}
+			break;
+		case 2:	// ЦИКЛОВОЕ_НАПОЛНЕНИЕ
+			Len = 3;
+			Values[0] = uart_get_uint16(29);		// x6
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i] / 6));
+			}
+			break;
+		case 3:	// РАСХОД_ВОЗДУХА
+			Len = 3;
+			Values[0] = uart_get_uint16(27);		// x10
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 4, "%3u", MIN(999, Values[i] / 10));
+			}
+			break;
+		case 4:	// ВРЕМЯ_ВПРЫСКА
+			Len = 4;
+			Values[0] = uart_get_uint16(25);		// x125
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 5, "%2u.%1u", MIN(99, Values[i] / 125), ((Values[i] % 125) * 10) / 125);
+			}
+			break;
+		case 5:	// ТЕКУЩИЙ_УОЗ
+			Len = 4;
+			Values[0] = uart_get_int8(19);			// x2
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 5, "%2u.%1u", MIN(99, (Values[i] / 2)), MIN(9, ABS((( Values[i] % 2) * 10) / 2)));
+			}
+			break;
+		case 6:	// ОБОРОТЫ_ХХ
+			Len = 4;
+			Values[0] = uart_get_uint8(15) * 10;	// x1
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 5, "%4u", Values[i]);
+			}
+			break;
+		case 7:	// ДАВЛЕНИЕ_МАСЛА
+			Len = 3;
+			Values[0] = uart_get_uint8(22);			// x10
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 4, "%1u.%1u", MIN(9, Values[i] / 10), MIN(9, Values[i] % 10));
+			}
+			break;
+		case 8:	// ПОЛОЖЕНИЕ_РХХ
+			Len = 3;
+			Values[0] = uart_get_uint8(17);			// x1
+			for (uint8_t i = 0; i < 6; i++) {
+				snprintf(Buffer + Len * i, 6, "%3u", MIN(999, Values[i]));
+			}
+			break;
 	}
 
 	for (uint8_t i = 0; i < 6; i++) {
@@ -341,7 +406,7 @@ void draw_graph(uint8_t GraphNumber) {
 	}
 	Space++;
 
-	oled_shift_graph_block();
+	if (!BK.ScreenChange) {oled_shift_graph_block();}
 	Values[0] = CONSTRAIN(Values[0], Values[1], Values[5]);
 	uint8_t y = (int32_t) 63 - MAX(0, Values[0] - Values[1]) * 10 / Numerator;
 	y = MAX(11, y);
@@ -375,72 +440,31 @@ void draw_water_temp_f(uint8_t x, uint8_t y) {
 }
 
 void draw_O2_sensor_f(uint8_t x, uint8_t y) {
-	// Тип датчика кислорода, 0 - УДК, 1 - ШДК.
-	uint8_t LambdaType;
-	uint16_t AFR = 0;
-	if (uart_get_uint8(12) > 0) {
-		// Если есть показания АФР, значит показывать надо АФР.
-		LambdaType = 1;
-		AFR = (uint16_t) (147 * (uart_get_uint8(12) + 128)) >> 8; // Значение x10.
-		snprintf(Buffer, 5, "%2u.%1u", AFR / 10, AFR % 10);
-	}
-	else {
-		// Иначе показываем напряжение.
-		LambdaType = 0;
-		AFR = (uint16_t) (125 * uart_get_uint8(23)) >> 8; // Значение x100.
-		snprintf(Buffer, 5, "%1u.%02u", AFR / 100, AFR % 100);
-	}
+	uint16_t AFR = (uint16_t) (125 * uart_get_uint8(23)) >> 8; // Значение x100.
+	snprintf(Buffer, 5, "%1u.%02u", AFR / 100, AFR % 100);
 
 	oled_draw_xbmp(x + 2, y + 2, Lambda_L_bits, Lambda_L_width, Lambda_L_height);
 	oled_set_font(u8g2_font_helvB10_tn);
 	oled_print_string(x + 10, y + 5, Buffer, 4);
 
 	if (BK.AlarmBoxTimer > 0) {
-		if (LambdaType == 1) {
-			if (AFR < LAMBDA_AFR_MIN || AFR > LAMBDA_AFR_MAX) {
-				oled_draw_box(x + 1, y + 1, 40, 19, 1);
-			}
-		}
-		else {
-			if (AFR < UDK_VOLT_MIN || AFR > UDK_VOLT_MAX) {
-				oled_draw_box(x + 1, y + 1, 40, 19, 1);
-			}
+		if (AFR < UDK_VOLT_MIN || AFR > UDK_VOLT_MAX) {
+			oled_draw_box(x + 1, y + 1, 40, 19, 1);
 		}
 	}
 }
 
 void draw_O2_sensor_h(uint8_t x, uint8_t y) {
-	// Тип датчика кислорода, 0 - УДК, 1 - ШДК.
-	uint8_t LambdaType;
-	uint16_t AFR = 0;
-
-	if (uart_get_uint8(12) > 0) {
-		// Если есть показания АФР, значит показывать надо АФР.
-		LambdaType = 1;
-		AFR = (uint16_t) (147 * (uart_get_uint8(12) + 128)) >> 8; // Значение x10.
-		snprintf(Buffer, 5, "%2u.%1u", AFR / 10, AFR % 10);
-	}
-	else {
-		// Иначе показываем напряжение.
-		LambdaType = 0;
-		AFR = (uint16_t) (125 * uart_get_uint8(23)) >> 8; // Значение x100.
-		snprintf(Buffer, 5, "%1u.%02u", AFR / 100, AFR % 100);
-	}
+	uint16_t AFR = (uint16_t) (125 * uart_get_uint8(23)) >> 8; // Значение x100.
+	snprintf(Buffer, 5, "%1u.%02u", AFR / 100, AFR % 100);
 
 	oled_draw_xbmp(x + 2, y + 1, Lambda_S_bits, Lambda_S_width, Lambda_S_height);
 	oled_set_font(u8g2_font_haxrcorp4089_tn);
 	oled_print_string(x + 20, y + 2, Buffer, 4);
 
 	if (BK.AlarmBoxTimer > 0) {
-		if (LambdaType == 1) {
-			if (AFR < LAMBDA_AFR_MIN || AFR > LAMBDA_AFR_MAX) {
-				oled_draw_box(x + 1, y + 1, 40, 9, 1);
-			}
-		}
-		else {
-			if (AFR < UDK_VOLT_MIN || AFR > UDK_VOLT_MAX) {
-				oled_draw_box(x + 1, y + 1, 40, 9, 1);
-			}
+		if (AFR < UDK_VOLT_MIN || AFR > UDK_VOLT_MAX) {
+			oled_draw_box(x + 1, y + 1, 40, 9, 1);
 		}
 	}
 }
@@ -494,21 +518,18 @@ void draw_map_f(uint8_t x, uint8_t y) {
 }
 
 void draw_inj_corr_h(uint8_t x, uint8_t y) {	// Коррекция времени впрыска.
-	int16_t CORR = (uart_get_uint8(18) - 128) * 100; // x256
+	int16_t CORR = (int16_t) (uart_get_uint8(18) - 128) * 100; // x256
 
 	oled_draw_xbmp(x + 2, y + 1, LambdaCorrS_bits, LambdaCorrS_width, LambdaCorrS_height);
 	oled_set_font(u8g2_font_haxrcorp4089_tn);
 
-	snprintf(Buffer, 6, "%3i.%1u", CORR / 256, ABS(((CORR % 256) * 10) / 256));
+	snprintf(Buffer, 6, "%3i.%1u", CORR / 256, (((ABS(CORR) % 256) * 10) / 256));
 
-	if (uart_get_uint8(18) > 128) {
-		if (ABS(CORR / 256) >= 10) {Buffer[0] = '+';}
-		else {Buffer[1] = '+';}
-	}
-	else if (uart_get_uint8(18) < 128) {	
-		if (ABS(CORR / 256) >= 10) {Buffer[0] = '-';}
-		else {Buffer[1] = '-';}
-	}
+	uint8_t SymbolPos = 1;
+	if (uart_get_uint8(18) < 103 || uart_get_uint8(18) > 153) {SymbolPos = 0;}
+
+	if (uart_get_uint8(18) > 128) {Buffer[SymbolPos] = '+';}
+	else if (uart_get_uint8(18) < 128)  {Buffer[SymbolPos] = '-';}
 
 	oled_print_string(x + 14, y + 2, Buffer, 5);
 
@@ -532,7 +553,13 @@ void draw_angle_h(uint8_t x, uint8_t y) {
 
 void draw_speed_f(uint8_t x, uint8_t y, uint8_t Type) {
 	uint8_t Speed = uart_get_uint8(20);
-	if (Type == 1) {Speed = get_car_speed() >> 1;}	// x2.
+	if (Type == 1) {
+		Speed = get_car_speed();
+		oled_draw_xbmp(x + 1, y + 2, SpeedDirect_bits, SpeedDirect_width, SpeedDirect_height);
+	}
+	else {
+		oled_draw_xbmp(x + 1, y + 2, Speed_bits, Speed_width, Speed_height);
+	}
 
 	oled_draw_xbmp(x + 1, y + 2, Speed_bits, Speed_width, Speed_height);
 	oled_set_font(u8g2_font_helvB12_tn);
@@ -614,6 +641,7 @@ void draw_airtemp_h(uint8_t x, uint8_t y) {
 
 void draw_oil_pressure_f(uint8_t x, uint8_t y) {
 	int8_t OilPress = uart_get_uint8(22);
+	uint16_t RPM = uart_get_uint8(14) * 40;
 
 	oled_set_font(u8g2_font_helvB10_tn);
 
@@ -621,7 +649,7 @@ void draw_oil_pressure_f(uint8_t x, uint8_t y) {
 	oled_print_string(x + 4, y + 5, Buffer, 3);
 	oled_draw_xbmp(x + 29, y + 2, OilPressure_bits, OilPressure_width, OilPressure_height);
 
-	if (BK.AlarmBoxTimer > 0) {
+	if (BK.AlarmBoxTimer > 0 && RPM > 500) {
 		if (OilPress < OIL_PRESSURE_MIN || OilPress > OIL_PRESSURE_MAX) {
 			oled_draw_box(x + 1, y + 1, 40, 19, 1);
 		}
@@ -709,9 +737,9 @@ void draw_statistics() {
 	#define ROW_SPACE_FINISH 16
 	#define ROW_SHIFT 5
 
-	BK.RideTimer = 5160;
-	BK.DistRide = 190950;
-	BK.FuelRide = 10750;
+	//BK.RideTimer = 5160;
+	//BK.DistRide = 190950;
+	//BK.FuelRide = 10750;
 
 	uint8_t Row = 0;
 	uint8_t y = 0;

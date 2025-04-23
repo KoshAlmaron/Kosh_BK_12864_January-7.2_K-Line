@@ -6,7 +6,8 @@
 	void draw_error_box();
 	void draw_no_signal();
 	void draw_config_box(uint8_t x, uint8_t y);
-
+	void draw_acceleration();
+	
 	void draw_current_errors();
 	void draw_saved_errors();
 	void draw_adc_value();

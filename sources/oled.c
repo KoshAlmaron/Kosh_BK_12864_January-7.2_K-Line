@@ -112,7 +112,7 @@ void oled_init(uint8_t Addr, uint8_t Contrast, uint8_t Flip) {
 		i2c_send_array(SendBuffer, BufPos);		// Отправка.
 		while (!(oled_ready()));
 
-		SendBuffer[1] = 0x40;	// Второй элемент комманда отправки массива данных.
+		SendBuffer[1] = 0x40;	// Второй элемент команда отправки массива данных.
 		// Заготовка для буфера команд.
 		CommandBuffer[0] = Addr;	// Первый элемент это адрес устройства.
 		// Все нечетныне элементы 0x80 означает, что следующий байт - это команда.
@@ -167,7 +167,7 @@ uint8_t oled_ready() {
 
 void oled_send_buffer() {
 	#ifdef SPI_CS_PIN
-		CommandBuffer[0] = 0x40;	// Второй элемент команда отправки массива данных.
+		CommandBuffer[0] = 0x40;
 		spi_send_array(CommandBuffer, 1, 0);
 		spi_send_array(DataBuffer, DATA_BUFFER_SIZE, 1);
 	#else

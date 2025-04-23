@@ -15,9 +15,9 @@
 #define IMPULSES_PER_METER 26		// Число импульсов датчика скорости на 1 м.
 #define IMPULSES_PER_MLITER 16		// Число импульсов расхода топлива на 1 мл.
 
-#define	LCD_UPDATE_PERIOD 200		// Период одновления экрана.
-#define ANSWER_WAIT_TIME 1000		// Время ожидания ответа.
-#define COMM_RESEND_DELAY 1000		// Задержка перед повторной отправкой команды.
+#define	LCD_UPDATE_PERIOD 200		// Период обновления экрана.
+#define ANSWER_WAIT_TIME 500		// Время ожидания ответа.
+#define COMM_RESEND_DELAY 500		// Задержка перед повторной отправкой команды.
 
 // Номер последнего экрана.
 #define LCD_LAST_DISPLAY 6
@@ -81,7 +81,7 @@
 //=============================================================================
 // Режим отладки. Проверка работы экранов без подключения к SECU.
 // Раскомментировать для включения.
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 // Запись значений пробега и расхода, если случайно затер или при замене платы.
 // Расход топлива храниться в мл, потому надо умножать литры на 1000.
@@ -92,12 +92,9 @@
 // закомментировать и прошить.
 //#define WRITE_EEPROM_ON_START
 
-// 30.06.2024
+// 08.04.2025
 // Раскомментировать параметры, которые необходимо записать в EEPROM	 
 #define WRITE_DISTANCE_DAY (0 * 1000LU)
-#define WRITE_DISTANCE_ALL (27793 * 1000LU)
+#define WRITE_DISTANCE_ALL (29250 * 1000LU)
 #define WRITE_FUEL_BURNED_DAY (0 * 1000LU)
-#define WRITE_FUEL_BURNED_ALL (2451 * 1000LU)
-
-#define WRITE_BRIGHT_LCD_NIGHT 0
-#define WRITE_BRIGHT_LCD_DAY 255
+#define WRITE_FUEL_BURNED_ALL (2605 * 1000LU)

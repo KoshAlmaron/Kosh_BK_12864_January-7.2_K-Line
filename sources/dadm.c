@@ -34,7 +34,8 @@ void dadm_test() {
 
 uint8_t dadm_get_state(uint16_t RPM) {
 	// Сброс состояния датчика на экране текущих ошибок.
-	if (BK.ScreenMode == 3 && OilPressureState == 16) {OilPressureState = 0;}
+	if (BK.ScreenMode == 4 && OilPressureState == 16) {OilPressureState = 0;}
+	if (OilPressureState == 16) {return 16;}
 	
 	if (RPM > 400 && OilPressureState) {
 		// Сброс после отображения аварии и нормализации давления.

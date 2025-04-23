@@ -40,12 +40,6 @@ void update_eeprom(uint8_t OverWrite) {
 		#ifdef WRITE_FUEL_BURNED_ALL
 			FuelAll = WRITE_FUEL_BURNED_ALL;
 		#endif
-		#ifdef WRITE_ENGINE_HOURS
-			BK.EngineHours = WRITE_ENGINE_HOURS;	
-		#endif
-		#ifdef WRITE_BRIGHT_LCD
-			BK.BrightLCD = WRITE_BRIGHT_LCD_NIGHT;
-		#endif
 	}
 
     eeprom_update_dword((uint32_t*) 0, DstDay); // Пробег суточный (0-3).
