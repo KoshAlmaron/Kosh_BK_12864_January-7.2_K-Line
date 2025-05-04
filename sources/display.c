@@ -19,6 +19,67 @@ static void display_draw_graph();
 static void display_draw_screen_change();
 static void display_draw_start_stop();
 
+// Основной экран
+static void display_draw_main() {
+	// Линии разметки
+	oled_draw_h_line(0, 21, 128);
+	oled_draw_h_line(0, 43, 128);
+	oled_draw_v_line(42, 0, 64);
+	oled_draw_v_line(85, 0, 64);
+
+	// ========================== Блоки данных ==========================
+    draw_ff_fc_f(0, 0);             // Мгновенный расход топлива (F)	
+    draw_water_temp_f(0, 22);       // Температура ОЖ (F)	
+    draw_distance_f(0, 44);         // Суточный и общий пробег (F)	
+    draw_map_f(43, 0);              // ДАД (F)	
+    draw_speed_f(43, 22, 0);        // Скорость с ЭБУ (F)	
+    draw_afc_f(43, 44);             // Средний расход топлива суточный и общий (F)	
+    draw_O2_sensor_h(86, 0);        // AFR (Напряжение УДК) (H)	
+    draw_inj_corr_h(86, 10);        // Коррекция времени впрыска (H)	
+    draw_airtemp_h(86, 22);         // Температура воздуха на впуске (H)	
+    draw_battery_h(86, 32);         // Напряжение сети (H)	
+    draw_fuel_burned_f(86, 44);     // Израсходованное топливо (F)	
+	// ========================== Блоки данных ==========================
+}
+
+// Второй экран
+static void display_draw_second() {
+	// Линии разметки
+	oled_draw_h_line(0, 21, 128);
+	oled_draw_h_line(0, 43, 128);
+	oled_draw_v_line(42, 0, 64);
+	oled_draw_v_line(85, 0, 64);
+
+	// ========================== Блоки данных ==========================
+    draw_rpm_f(0, 0);               // Обороты (F)	
+    draw_water_temp_f(0, 22);       // Температура ОЖ (F)	
+    draw_speed_f(0, 44, 0);         // Скорость с ЭБУ (F)	
+    draw_map_f(43, 0);              // ДАД (F)	
+    draw_trottle_f(43, 22);         // ДПДЗ / РХХ (F)	
+    draw_speed_f(43, 44, 1);        // Скорость напрямую с ДС (F)	
+    draw_oil_pressure_f(86, 0);     // Давление масла (F)	
+    draw_airtemp_h(86, 22);         // Температура воздуха на впуске (H)	
+    draw_angle_h(86, 32);           // Текущий УОЗ (H)	
+    draw_air_flow_f(86, 44);        // Расход воздуха (F)	
+	// ========================== Блоки данных ==========================
+}
+
+// Экран замера разгона.
+static void display_draw_acceleration() {
+	// Линии разметки
+	oled_draw_h_line(86, 21, 42);
+	oled_draw_h_line(86, 43, 42);
+	oled_draw_v_line(85, 0, 64);
+
+	// ========================== Блоки данных ==========================
+    draw_speed_f(86, 0, 1);         // Скорость напрямую с ДС (F)	
+    draw_map_f(86, 22);             // ДАД (F)	
+    draw_water_temp_f(86, 44);      // Температура ОЖ (F)	
+	// ========================== Блоки данных ==========================
+
+	draw_acceleration();
+}
+
 void display_draw_data(uint8_t Timer) {
 	if (BK.ScreenChange) {display_draw_screen_change();}
 	else if (BK.StartStop) {display_draw_start_stop();}
@@ -85,74 +146,6 @@ void display_draw_no_signal() {
 
 	draw_no_signal();
 	oled_send_buffer();
-}
-
-// Основной экран
-static void display_draw_main() {
-	// Линии разметки
-	oled_draw_h_line(0, 21, 128);
-	oled_draw_h_line(0, 43, 128);
-	oled_draw_v_line(42, 0, 64);
-	oled_draw_v_line(85, 0, 64);
-
-	// ========================== Блоки данных ==========================
-    draw_ff_fc_f(0, 0);             // Мгновенный расход топлива (F)	
-    draw_water_temp_f(0, 22);       // Температура ОЖ (F)	
-    draw_distance_f(0, 44);         // Суточный и общий пробег (F)	
-    draw_map_f(43, 0);              // ДАД (F)	
-    draw_speed_f(43, 22, 0);        // Скорость с ЭБУ (F)	
-    draw_afc_f(43, 44);             // Средний расход топлива суточный и общий (F)	
-    draw_O2_sensor_h(86, 0);        // AFR (Напряжение УДК) (H)	
-    draw_inj_corr_h(86, 10);        // Коррекция времени впрыска (H)	
-    draw_airtemp_h(86, 22);         // Температура воздуха на впуске (H)	
-    draw_battery_h(86, 32);         // Напряжение сети (H)	
-    draw_fuel_burned_f(86, 44);     // Израсходованное топливо (F)	
-	// ========================== Блоки данных ==========================
-}
-
-// Второй экран
-static void display_draw_second() {
-	// Линии разметки
-	oled_draw_h_line(0, 21, 128);
-	oled_draw_h_line(0, 43, 128);
-	oled_draw_v_line(42, 0, 64);
-	oled_draw_v_line(85, 0, 64);
-
-	// ========================== Блоки данных ==========================
-    draw_rpm_f(0, 0);               // Обороты (F)	
-    draw_water_temp_f(0, 22);       // Температура ОЖ (F)	
-    draw_speed_f(0, 44, 0);         // Скорость с ЭБУ (F)	
-    draw_map_f(43, 0);              // ДАД (F)	
-    draw_trottle_f(43, 22);         // ДПДЗ / РХХ (F)	
-    draw_speed_f(43, 44, 1);        // Скорость напрямую с ДС (F)	
-    draw_oil_pressure_f(86, 0);     // Давление масла (F)	
-    draw_airtemp_h(86, 22);         // Температура воздуха на впуске (H)	
-    draw_angle_h(86, 32);           // Текущий УОЗ (H)	
-    draw_air_flow_f(86, 44);        // Расход воздуха (F)	
-	// ========================== Блоки данных ==========================
-}
-
-// Экран замера разгона.
-static void display_draw_acceleration() {
-	// Линии разметки
-	oled_draw_h_line(86, 21, 42);
-	oled_draw_h_line(86, 43, 42);
-	oled_draw_v_line(85, 0, 64);
-
-	// oled_draw_h_line(0, 21, 128);
-	// oled_draw_h_line(0, 43, 128);
-
-	// oled_draw_h_line(0, 10, 128);
-	// oled_draw_h_line(0, 31, 128);
-	// oled_draw_h_line(0, 54, 128);
-
-	// ========================== Блоки данных ==========================
-    draw_speed_f(86, 0, 1);         // Скорость напрямую с ДС (F)	
-    draw_map_f(86, 22);             // ДАД (F)	
-    draw_water_temp_f(86, 44);      // Температура ОЖ (F)	
-	// ========================== Блоки данных ==========================
-
-	draw_acceleration();
 }
 
 static void display_draw_graph() {
